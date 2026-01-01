@@ -1,0 +1,21 @@
+[project]
+name = "local-rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.4.0",
+    "docx2txt>=0.9",
+    "dspy-ai>=3.0.4",
+    "markdown>=3.10",
+    "ollama>=0.6.1",
+    "pydantic>=2.12.5",
+    "pypdf>=6.5.0",
+    "pypdf2>=3.0.1",
+    "pytest>=9.0.2",
+    "python-dotenv>=1.2.1",
+    "rich>=14.2.0",
+    "sentence-transformers>=5.2.0",
+    "tqdm>=4.67.1",
+]
