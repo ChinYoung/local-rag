@@ -26,13 +26,15 @@ class Config:
     chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", "./data/vector_store")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
+    # HuggingFace配置
+    hf_cache_folder: Optional[str] = os.getenv("HF_CACHE_FOLDER", "./.hf_cache")
+
     # RAG配置
     retrieval_top_k: int = int(os.getenv("RETRIEVAL_TOP_K", "3"))
     max_context_length: int = int(os.getenv("MAX_CONTEXT_LENGTH", "3000"))
 
     # 系统配置
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
-    hf_cache_folder: Optional[str] = os.getenv("HF_CACHE_FOLDER", None)
 
     @property
     def ollama_api_url(self) -> str:

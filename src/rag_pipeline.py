@@ -4,6 +4,7 @@ RAG管道核心模块
 
 import chromadb
 from chromadb.config import Settings
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import dspy
 import numpy as np
@@ -25,6 +26,9 @@ class RAGPipeline:
     def __init__(self):
         # 初始化嵌入模型
         self.embeddings = LocalEmbeddings()
+
+        # 创建向量数据库目录（如果不存在）
+        Path(config.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
 
         # 初始化ChromaDB
         self.chroma_client = chromadb.PersistentClient(
