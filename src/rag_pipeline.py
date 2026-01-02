@@ -4,132 +4,19 @@ RAG管道核心模块
 
 import chromadb
 from chromadb.config import Settings
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 import dspy
-import ollama
-from sentence_transformers import SentenceTransformer
 import numpy as np
 
 from src.config import config
-from src.document_loader import Document, DocumentLoader
+from src.document_loader import Document
+from src.retrievers import ChromaDBRetriever
+from src.language_models import RemoteOllamaLM
+from src.embeddings import LocalEmbeddings
+import logging
 
-
-class ChromaDBRetriever(dspy.Retrieve):
-    """Custom ChromaDB Retriever for DSPy"""
-
-    def __init__(
-        self,
-        collection_name: str = "documents",
-        persist_directory: Optional[str] = None,
-        embedding_function: Optional[Any] = None,
-        k: int = 3,
-    ):
-        super().__init__(k=k)
-        self.collection_name = collection_name
-        self.persist_directory = persist_directory
-        self.embedding_function = embedding_function
-
-        # Initialize ChromaDB client
-        if persist_directory:
-            self.chroma_client = chromadb.PersistentClient(
-                path=persist_directory,
-                settings=Settings(anonymized_telemetry=False),
-            )
-        else:
-            self.chroma_client = chromadb.EphemeralClient()
-        self.collection = None
-
-    def _get_collection(self):
-        """Get or create collection"""
-        if self.collection is None:
-            self.collection = self.chroma_client.get_or_create_collection(
-                name=self.collection_name, metadata={"hnsw:space": "cosine"}
-            )
-        return self.collection
-
-    def forward(self, query: str, k: Optional[int] = None, **kwargs) -> List[str]:
-        """Retrieve documents from ChromaDB"""
-        k = k or self.k
-        collection = self._get_collection()
-
-        # Generate embedding for query
-        if self.embedding_function is None:
-            raise ValueError("embedding_function must be provided")
-        query_embedding = self.embedding_function([query])[0]
-
-        # Query collection
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=k,
-            include=["documents", "metadatas", "distances"],
-        )
-
-        # Format results
-        passages = []
-        if results and results["documents"]:
-            for doc_list in results["documents"]:
-                passages.extend(doc_list)
-
-        return passages
-
-
-class OllamaLM(dspy.LM):
-    """Ollama语言模型适配器"""
-
-    def __init__(self, model: Optional[str] = None, base_url: Optional[str] = None):
-        selected_model = model or config.ollama_model
-        super().__init__(selected_model)
-        self.model = selected_model
-        self.base_url = base_url or config.ollama_base_url
-
-        # 测试连接
-        try:
-            response = ollama.list()
-            print(
-                f"✅ 连接到 Ollama，可用模型: {[m['name'] for m in response['models']]}"
-            )
-        except Exception as e:
-            raise ConnectionError(f"无法连接到 Ollama ({self.base_url}): {e}")
-
-    def basic_request(self, prompt: str, **kwargs):
-        """基础请求方法"""
-        response = ollama.generate(
-            model=self.model,
-            prompt=prompt,
-            options={
-                "temperature": kwargs.get("temperature", 0.7),
-                "max_tokens": kwargs.get("max_tokens", 1000),
-                "top_p": kwargs.get("top_p", 0.9),
-            },
-        )
-        return response
-
-    def __call__(
-        self,
-        prompt: Optional[str] = None,
-        max_tokens: Optional[int] = None,
-        **kwargs,
-    ):
-        response = self.basic_request(
-            prompt or "",
-            max_tokens=max_tokens,
-            **kwargs,
-        )
-        return [response["response"]]
-
-
-class LocalEmbeddings:
-    """本地嵌入模型"""
-
-    def __init__(self, model_name: Optional[str] = None):
-        self.model_name = model_name or config.embedding_model
-        print(f"加载嵌入模型: {self.model_name}")
-        self.model = SentenceTransformer(self.model_name)
-
-    def embed(self, texts: List[str]) -> List[List[float]]:
-        """生成文本嵌入"""
-        embeddings = self.model.encode(texts, show_progress_bar=False)
-        return embeddings.tolist()
+logging.basicConfig(level=getattr(logging, config.log_level))
+logger = logging.getLogger(__name__)
 
 
 class RAGPipeline:
@@ -154,7 +41,12 @@ class RAGPipeline:
         )
 
         # 初始化Ollama语言模型
-        self.lm = OllamaLM()
+        # self.lm = OllamaLM()
+        self.lm = RemoteOllamaLM(
+            model=config.ollama_model,
+            base_url=config.ollama_base_url,
+            timeout=config.ollama_timeout,
+        )
 
         # 配置DSPy
         dspy.configure(lm=self.lm, rm=self.retriever)
@@ -245,7 +137,7 @@ class RAGPipeline:
         self, question: str, use_reasoning: bool = False
     ) -> Dict[str, Any]:
         """回答问题"""
-
+        logger.info(f"收到问题----------: {question}")
         # 检索相关文档
         retrieved_docs = self.retrieve(question)
         context = "\n\n".join([doc["content"] for doc in retrieved_docs])
@@ -254,15 +146,26 @@ class RAGPipeline:
         if len(context) > config.max_context_length:
             context = context[: config.max_context_length] + "..."
 
+        logger.info(f"检索到的上下文: {context[:200]}...")
+
         # 生成答案
+        logger.info(f"开始生成答案, use_reasoning={use_reasoning}")
         if use_reasoning:
+            logger.info("使用reasoning_generator")
             pred = self.reasoning_generator(context=context, question=question)
             answer = pred.answer
             reasoning = pred.reasoning
+            logger.info(f"Pred对象: {pred}")
+            logger.info(f"Answer: {answer}, Reasoning: {reasoning}")
         else:
+            logger.info("使用answer_generator")
             pred = self.answer_generator(context=context, question=question)
             answer = pred.answer
             reasoning = None
+            logger.info(f"Pred对象: {pred}")
+            logger.info(f"Answer: {answer}")
+
+        logger.info(f"生成的答案: {answer}")
 
         return {
             "question": question,
@@ -306,44 +209,3 @@ class RAGPipeline:
                 break
             except Exception as e:
                 print(f"❌ 错误: {e}")
-
-
-class RAGOptimizer:
-    """RAG优化器"""
-
-    @staticmethod
-    def optimize_with_bootstrap(rag_pipeline, train_examples):
-        """使用BootstrapFewShot优化"""
-
-        class RAG(dspy.Module):
-            def __init__(self):
-                super().__init__()
-                self.retrieve = dspy.Retrieve(k=3)
-                self.generate_answer = dspy.ChainOfThought(rag_pipeline.GenerateAnswer)
-
-            def forward(self, question):
-                passages = cast(List[str], self.retrieve(question))
-                context = "\n\n".join(passages) if passages else ""
-                return self.generate_answer(context=context, question=question)
-
-        # 定义评估指标
-        def validate_answer(example, pred, trace=None):
-            # 简单评估：检查答案是否包含关键词
-            gold_answer = example.answer.lower()
-            pred_answer = pred.answer.lower()
-
-            # 计算重叠词的比例
-            gold_words = set(gold_answer.split())
-            pred_words = set(pred_answer.split())
-
-            if not gold_words:
-                return 0
-
-            overlap = len(gold_words.intersection(pred_words)) / len(gold_words)
-            return overlap > 0.5  # 至少50%重叠
-
-        # 优化
-        teleprompter = dspy.BootstrapFewShot(metric=validate_answer)
-        optimized_rag = teleprompter.compile(RAG(), trainset=train_examples)
-
-        return optimized_rag

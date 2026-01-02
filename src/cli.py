@@ -129,10 +129,12 @@ def check_system_status(rag: RAGPipeline):
 
     # 检查Ollama
     try:
-        import ollama
-
-        response = ollama.list()
-        models = [m["name"] for m in response["models"]]
+        response = rag.lm.client.list()
+        # Handle different response structures
+        if isinstance(response, dict) and "models" in response:
+            models = [m.get("name") or m.get("model") for m in response["models"]]
+        else:
+            models = []
         console.print(f"✅ [green]Ollama连接正常[/green]")
         console.print(f"   可用模型: {', '.join(models)}")
         console.print(f"   当前模型: {config.ollama_model}")

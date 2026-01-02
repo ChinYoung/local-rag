@@ -18,6 +18,10 @@ class Config:
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 
+    # 连接设置
+    ollama_timeout: int = int(os.getenv("OLLAMA_TIMEOUT", "30"))
+    ollama_max_retries: int = int(os.getenv("OLLAMA_MAX_RETRIES", "3"))
+
     # 向量数据库配置
     chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", "./data/vector_store")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
