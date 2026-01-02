@@ -102,18 +102,14 @@ class RemoteOllamaLM(dspy.LM):
 
             # 检查模型
             models = self.client.list()
-            logger.debug(f"models response type: {type(models)}")
-            logger.debug(f"models response: {models}")
 
             # Handle different response structures
             available_models = []
             if hasattr(models, "models"):
-                # Response object with models attribute
                 available_models = [
                     m.get("name", m.get("model", "")) for m in models.models
                 ]
             elif isinstance(models, dict) and "models" in models:
-                # Dict response
                 available_models = [
                     m.get("name", m.get("model", "")) for m in models["models"]
                 ]
@@ -121,7 +117,7 @@ class RemoteOllamaLM(dspy.LM):
             # Filter out empty strings
             available_models = [m for m in available_models if m]
 
-            logger.info(f"✅ 连接成功! 可用模型: {available_models}")
+            logger.info(f"✅ Ollama连接成功, 可用模型: {available_models}")
 
             # 检查所需模型是否可用
             if self.model not in available_models:
@@ -132,10 +128,7 @@ class RemoteOllamaLM(dspy.LM):
 
             # 显示模型详情
             try:
-                model_info = self.client.show(self.model)
-                logger.info(
-                    f"📋 模型详情: {model_info.get('modelfile', 'N/A')[:100]}..."
-                )
+                self.client.show(self.model)
             except:
                 logger.warning(f"无法获取模型 {self.model} 的详细信息")
 
@@ -188,58 +181,33 @@ class RemoteOllamaLM(dspy.LM):
         **kwargs,
     ):
         """调用语言模型"""
-        start_time = time.time()
-
-        # Log all parameters received
-        logger.info(f"LM __call__ 被调用")
-        logger.info(
-            f"  - prompt类型: {type(prompt)}, 长度: {len(prompt) if prompt else 0}"
-        )
-        logger.info(f"  - messages: {messages}")
-        logger.info(f"  - kwargs: {list(kwargs.keys())}")
-
         # DSPy may pass the prompt in different ways
         actual_prompt = prompt
 
         # Check if prompt is in kwargs
         if not actual_prompt and "prompt" in kwargs:
             actual_prompt = kwargs.pop("prompt")
-            logger.info(
-                f"从kwargs中获取prompt, 长度: {len(actual_prompt) if actual_prompt else 0}"
-            )
 
         # Check if messages format is used
         if not actual_prompt and messages:
-            # Convert messages to prompt
             actual_prompt = "\n".join(
                 [m.get("content", "") for m in messages if isinstance(m, dict)]
             )
-            logger.info(f"从messages转换prompt, 长度: {len(actual_prompt)}")
 
         if not actual_prompt:
-            logger.error("⚠️ 没有收到有效的prompt!")
-            logger.error(f"完整kwargs: {kwargs}")
-            # Return empty to avoid crash
+            logger.error("未收到有效的prompt")
             return [""]
-
-        logger.info(f"最终prompt长度: {len(actual_prompt)}")
-        logger.debug(f"Prompt内容: {actual_prompt[:200]}...")
 
         try:
             response = self.basic_request(actual_prompt, **kwargs)
-            elapsed = time.time() - start_time
-
-            # Extract response text
             response_text = response.get("response", "")
-            logger.info(f"模型响应时间: {elapsed:.2f}s, 响应长度: {len(response_text)}")
-            logger.debug(f"响应内容: {response_text[:200]}...")
 
             if not response_text:
-                logger.warning("⚠️ 模型返回空响应!")
+                logger.warning("模型返回空响应")
 
             return [response_text]
         except Exception as e:
-            logger.error(f"模型调用失败: {e}", exc_info=True)
+            logger.error(f"模型调用失败: {e}")
             raise
 
     def stream_generate(self, prompt: str, **kwargs):

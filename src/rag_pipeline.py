@@ -137,7 +137,6 @@ class RAGPipeline:
         self, question: str, use_reasoning: bool = False
     ) -> Dict[str, Any]:
         """回答问题"""
-        logger.info(f"收到问题----------: {question}")
         # 检索相关文档
         retrieved_docs = self.retrieve(question)
         context = "\n\n".join([doc["content"] for doc in retrieved_docs])
@@ -146,26 +145,15 @@ class RAGPipeline:
         if len(context) > config.max_context_length:
             context = context[: config.max_context_length] + "..."
 
-        logger.info(f"检索到的上下文: {context[:200]}...")
-
         # 生成答案
-        logger.info(f"开始生成答案, use_reasoning={use_reasoning}")
         if use_reasoning:
-            logger.info("使用reasoning_generator")
             pred = self.reasoning_generator(context=context, question=question)
             answer = pred.answer
             reasoning = pred.reasoning
-            logger.info(f"Pred对象: {pred}")
-            logger.info(f"Answer: {answer}, Reasoning: {reasoning}")
         else:
-            logger.info("使用answer_generator")
             pred = self.answer_generator(context=context, question=question)
             answer = pred.answer
             reasoning = None
-            logger.info(f"Pred对象: {pred}")
-            logger.info(f"Answer: {answer}")
-
-        logger.info(f"生成的答案: {answer}")
 
         return {
             "question": question,
