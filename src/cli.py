@@ -10,6 +10,11 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
+# Ensure the project root is on sys.path when running as a script (e.g., `uv run src/cli.py`).
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from src.config import config
 from src.document_loader import DocumentLoader
 from src.rag_pipeline import RAGPipeline
