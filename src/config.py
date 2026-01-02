@@ -32,6 +32,7 @@ class Config:
 
     # 系统配置
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    hf_cache_folder: Optional[str] = os.getenv("HF_CACHE_FOLDER", None)
 
     @property
     def ollama_api_url(self) -> str:

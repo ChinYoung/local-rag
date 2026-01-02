@@ -25,3 +25,4 @@ data/vector_store/
 .idea/
 *.swp
 *.swo
+.hf_cache
